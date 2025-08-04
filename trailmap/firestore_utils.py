@@ -6,11 +6,14 @@ making unit-testing and future refactors simple.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import pandas as pd
+import streamlit as st
 from google.cloud import firestore
+from google.oauth2 import service_account
 
 from .config import get
 
@@ -20,14 +23,20 @@ _client: Optional[firestore.Client] = None
 
 def client() -> firestore.Client:
     """
-    Lazily create and cache a Firestore client
-    (so imported modules don't block app startup).
+    Lazily create and cache a Firestore client with explicit credentials
+    built from the JSON string stored in Streamlit secrets
+    (`GOOGLE_APPLICATION_CREDENTIALS_JSON`).
     """
-    global _client  # noqa: WPS420  (module-level state is okay here)
+    global _client  # noqa: WPS420 (module-level cache is intentional)
     if _client is None:
-        _client = firestore.Client(project=get("FIRESTORE_PROJECT_ID"))
-    return _client
+        creds_dict = json.loads(st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+        creds = service_account.Credentials.from_service_account_info(creds_dict)
 
+        _client = firestore.Client(
+            project=get("FIRESTORE_PROJECT_ID"),
+            credentials=creds,
+        )
+    return _client
 
 # ---  Camera CRUD -------------------------------------------------------------
 CAMERA_COL = "cameras"
