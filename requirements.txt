@@ -1,0 +1,8 @@
+streamlit>=1.34.0          # UI layer
+pydeck>=0.8.0              # interactive maps
+pandas>=2.2.2              # data wrangling
+google-cloud-firestore>=2.16.0  # database
+fastapi>=0.111.0           # ingest endpoint
+uvicorn[standard]>=0.30.0  # ASGI server
+python-dotenv>=1.0.1       # local env overrides
+pydantic>=2.7.1            # request validation
