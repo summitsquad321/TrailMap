@@ -6,7 +6,10 @@ making unit-testing and future refactors simple.
 """
 from __future__ import annotations
 
+import os
+import re
 import json
+import tempfile
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -18,61 +21,46 @@ from google.oauth2 import service_account
 from .config import get
 
 # ---  Firestore initialisation ------------------------------------------------
-import os
-import re
-import tempfile
-from datetime import datetime
-from typing import Dict, List, Optional
-
-import pandas as pd
-import streamlit as st
-from google.cloud import firestore
-from google.oauth2 import service_account
-import json
-
-from .config import get
-
 _client: Optional[firestore.Client] = None
 
 
 def _clean_json(raw: str) -> str:
     """
-    Replace any *physical* CR or LF character that appears inside the JSON
-    with the two-character escape sequence ``\\n`` so the string becomes
-    valid JSON, regardless of how it was pasted into Streamlit Secrets.
+    • Strip leading/trailing whitespace (incl. the newline that often appears
+      right after the opening triple quotes in Streamlit Secrets).
+    • Convert any physical CR/LF that remains *inside* the JSON into the escaped
+      two-character sequence ``\\n`` so ``json.loads`` always succeeds.
     """
-    return re.sub(r"[\r\n]+", r"\\n", raw)
+    trimmed = raw.strip()          # remove leading \n / trailing spaces
+    return re.sub(r"[\r\n]+", r"\\n", trimmed)
 
 
 def _materialise_key_to_tmp() -> str:
     """
-    Write the cleaned JSON from Streamlit secrets to a temporary file and
-    return the full path. This file is deleted automatically when the app
-    restarts, so no secret remains on disk long-term.
+    Write the cleaned JSON from Streamlit secrets to a temporary file and return
+    its path.  The file survives for the life of the container and disappears
+    on restart, so no long-term secret is left on disk.
     """
-    raw = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
-    cleaned = _clean_json(raw)
+    cleaned = _clean_json(st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
 
-    # Validate once; will throw if still malformed
+    # Validate once; will raise with a clear message if still malformed
     json.loads(cleaned)
 
-    tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-    tmpfile.write(cleaned.encode("utf-8"))
-    tmpfile.flush()
-    return tmpfile.name
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+    tmp.write(cleaned.encode("utf-8"))
+    tmp.flush()
+    return tmp.name
 
 
 def client() -> firestore.Client:
     """
-    Lazily create and cache a Firestore client that authenticates via the
+    Lazily create and cache a Firestore client that authenticates using the
     service-account key we wrote to /tmp.
     """
     global _client
     if _client is None:
         key_path = _materialise_key_to_tmp()
-
-        # Let default Google credentials pick it up too (optional)
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path  # for any ADC users
 
         creds = service_account.Credentials.from_service_account_file(key_path)
         _client = firestore.Client(
