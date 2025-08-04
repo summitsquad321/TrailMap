@@ -6,9 +6,9 @@ making unit-testing and future refactors simple.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
-import json
 import tempfile
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -20,31 +20,39 @@ from google.oauth2 import service_account
 
 from .config import get
 
-# ---  Firestore initialisation ------------------------------------------------
+# ─── Firestore initialisation ────────────────────────────────────────────────
 _client: Optional[firestore.Client] = None
 
 
-def _clean_json(raw: str) -> str:
+def _sanitize_key_json(raw: str) -> str:
     """
-    • Strip leading/trailing whitespace (incl. the newline that often appears
-      right after the opening triple quotes in Streamlit Secrets).
-    • Convert any physical CR/LF that remains *inside* the JSON into the escaped
-      two-character sequence ``\\n`` so ``json.loads`` always succeeds.
+    • Strip leading / trailing whitespace (incl. the newline inserted right
+      after the opening triple-quotes in Streamlit Secrets).
+
+    • Replace *only* the physical CR/LF characters **inside** the
+      ``"private_key"`` value with the two-character escape sequence ``\\n``.
+
+      New-lines elsewhere (between fields) are valid JSON whitespace and are
+      therefore preserved.
     """
-    trimmed = raw.strip()          # remove leading \n / trailing spaces
-    return re.sub(r"[\r\n]+", r"\\n", trimmed)
+    raw = raw.strip()
+
+    def _fix(match: re.Match[str]) -> str:              # match group = key body
+        body: str = match.group(1).replace("\r", "").replace("\n", "\\n")
+        return f'"private_key":"{body}"'
+
+    # (?s) = DOTALL → .* spans multiple lines
+    pattern = re.compile(r'"private_key"\s*:\s*"(.*?)"', flags=re.S)
+    return pattern.sub(_fix, raw)
 
 
-def _materialise_key_to_tmp() -> str:
+def _write_tmp_keyfile() -> str:
     """
-    Write the cleaned JSON from Streamlit secrets to a temporary file and return
-    its path.  The file survives for the life of the container and disappears
-    on restart, so no long-term secret is left on disk.
+    Clean the JSON, validate with ``json.loads``, write to /tmp, and return the
+    path.  The temp file disappears on container restart.
     """
-    cleaned = _clean_json(st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
-
-    # Validate once; will raise with a clear message if still malformed
-    json.loads(cleaned)
+    cleaned = _sanitize_key_json(st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+    json.loads(cleaned)                     # raises if still malformed
 
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
     tmp.write(cleaned.encode("utf-8"))
@@ -54,13 +62,13 @@ def _materialise_key_to_tmp() -> str:
 
 def client() -> firestore.Client:
     """
-    Lazily create and cache a Firestore client that authenticates using the
-    service-account key we wrote to /tmp.
+    Lazily build & cache a Firestore client using the service-account key
+    materialised to /tmp.
     """
     global _client
     if _client is None:
-        key_path = _materialise_key_to_tmp()
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path  # for any ADC users
+        key_path = _write_tmp_keyfile()
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path  # for ADC reuse
 
         creds = service_account.Credentials.from_service_account_file(key_path)
         _client = firestore.Client(
