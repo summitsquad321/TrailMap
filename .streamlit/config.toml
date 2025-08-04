@@ -1,0 +1,7 @@
+# Streamlit-specific settings
+[server]
+headless   = true
+runOnSave  = true
+[theme]
+primaryColor = "#08A045"       # deep green
+base        = "light"
