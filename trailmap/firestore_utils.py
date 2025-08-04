@@ -18,38 +18,46 @@ from google.oauth2 import service_account
 from .config import get
 
 # ---  Firestore initialisation ------------------------------------------------
+import os
+import tempfile
+from datetime import datetime
+from typing import Dict, List, Optional
+
+import pandas as pd
+import streamlit as st
+from google.cloud import firestore
+from google.oauth2 import service_account
+
+from .config import get
+
 _client: Optional[firestore.Client] = None
 
 
-def _load_creds_from_secret() -> service_account.Credentials:
+def _materialise_key_to_tmp() -> str:
     """
-    Build a Credentials object from the JSON string stored in
-    st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"].
-
-    If the secret was pasted with *real* newline characters inside the
-    private_key, replace them with the JSON escape sequence ``\\n`` so that
-    ``json.loads`` succeeds.
+    Write the raw JSON from `st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]`
+    to a temporary file and return its path.
     """
     raw = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
-
-    # Sanitise: convert any literal new-lines inside the JSON into "\n".
-    if "\n" in raw and "\\n" not in raw:
-        raw = raw.replace("\n", "\\n")
-
-    creds_dict = json.loads(raw)
-    return service_account.Credentials.from_service_account_info(creds_dict)
+    tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+    tmpfile.write(raw.encode())        # raw bytes, keep every newline
+    tmpfile.flush()
+    return tmpfile.name
 
 
 def client() -> firestore.Client:
     """
-    Lazily create and cache a Firestore client using explicit credentials.
+    Lazily create and cache a Firestore client that authenticates via the
+    service-account key we just wrote to /tmp.
     """
     global _client
     if _client is None:
-        print("🔎  Building Firestore credentials …")      # NEW
-        creds = _load_creds_from_secret()
-        print("✅  Creds parsed OK, creating client …")    # NEW
+        key_path = _materialise_key_to_tmp()
 
+        # Optionally expose it so other libs using ADC can pick it up
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
+
+        creds = service_account.Credentials.from_service_account_file(key_path)
         _client = firestore.Client(
             project=get("FIRESTORE_PROJECT_ID"),
             credentials=creds,
