@@ -19,6 +19,7 @@ from .config import get
 
 # ---  Firestore initialisation ------------------------------------------------
 import os
+import re
 import tempfile
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -27,20 +28,36 @@ import pandas as pd
 import streamlit as st
 from google.cloud import firestore
 from google.oauth2 import service_account
+import json
 
 from .config import get
 
 _client: Optional[firestore.Client] = None
 
 
+def _clean_json(raw: str) -> str:
+    """
+    Replace any *physical* CR or LF character that appears inside the JSON
+    with the two-character escape sequence ``\\n`` so the string becomes
+    valid JSON, regardless of how it was pasted into Streamlit Secrets.
+    """
+    return re.sub(r"[\r\n]+", r"\\n", raw)
+
+
 def _materialise_key_to_tmp() -> str:
     """
-    Write the raw JSON from `st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]`
-    to a temporary file and return its path.
+    Write the cleaned JSON from Streamlit secrets to a temporary file and
+    return the full path. This file is deleted automatically when the app
+    restarts, so no secret remains on disk long-term.
     """
     raw = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
+    cleaned = _clean_json(raw)
+
+    # Validate once; will throw if still malformed
+    json.loads(cleaned)
+
     tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-    tmpfile.write(raw.encode())        # raw bytes, keep every newline
+    tmpfile.write(cleaned.encode("utf-8"))
     tmpfile.flush()
     return tmpfile.name
 
@@ -48,13 +65,13 @@ def _materialise_key_to_tmp() -> str:
 def client() -> firestore.Client:
     """
     Lazily create and cache a Firestore client that authenticates via the
-    service-account key we just wrote to /tmp.
+    service-account key we wrote to /tmp.
     """
     global _client
     if _client is None:
         key_path = _materialise_key_to_tmp()
 
-        # Optionally expose it so other libs using ADC can pick it up
+        # Let default Google credentials pick it up too (optional)
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
 
         creds = service_account.Credentials.from_service_account_file(key_path)
