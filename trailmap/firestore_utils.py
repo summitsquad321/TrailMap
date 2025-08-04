@@ -44,9 +44,12 @@ def client() -> firestore.Client:
     """
     Lazily create and cache a Firestore client using explicit credentials.
     """
-    global _client  # noqa: WPS420 (module-level cache is intentional)
+    global _client
     if _client is None:
+        print("🔎  Building Firestore credentials …")      # NEW
         creds = _load_creds_from_secret()
+        print("✅  Creds parsed OK, creating client …")    # NEW
+
         _client = firestore.Client(
             project=get("FIRESTORE_PROJECT_ID"),
             credentials=creds,
