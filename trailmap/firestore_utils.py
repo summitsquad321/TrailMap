@@ -21,17 +21,32 @@ from .config import get
 _client: Optional[firestore.Client] = None
 
 
+def _load_creds_from_secret() -> service_account.Credentials:
+    """
+    Build a Credentials object from the JSON string stored in
+    st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"].
+
+    If the secret was pasted with *real* newline characters inside the
+    private_key, replace them with the JSON escape sequence ``\\n`` so that
+    ``json.loads`` succeeds.
+    """
+    raw = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
+
+    # Sanitise: convert any literal new-lines inside the JSON into "\n".
+    if "\n" in raw and "\\n" not in raw:
+        raw = raw.replace("\n", "\\n")
+
+    creds_dict = json.loads(raw)
+    return service_account.Credentials.from_service_account_info(creds_dict)
+
+
 def client() -> firestore.Client:
     """
-    Lazily create and cache a Firestore client with explicit credentials
-    built from the JSON string stored in Streamlit secrets
-    (`GOOGLE_APPLICATION_CREDENTIALS_JSON`).
+    Lazily create and cache a Firestore client using explicit credentials.
     """
     global _client  # noqa: WPS420 (module-level cache is intentional)
     if _client is None:
-        creds_dict = json.loads(st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
-        creds = service_account.Credentials.from_service_account_info(creds_dict)
-
+        creds = _load_creds_from_secret()
         _client = firestore.Client(
             project=get("FIRESTORE_PROJECT_ID"),
             credentials=creds,
