@@ -67,7 +67,7 @@ if crud_action == "Add Camera":
             try:
                 create_camera(new_id, nickname, lat, lon)
                 st.success(f"Camera '{new_id}' created.")
-                st.experimental_rerun()
+                st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
 
@@ -82,14 +82,14 @@ elif crud_action == "Edit Camera":
         if submitted:
             update_camera(target, nickname=nickname, lat=lat, lon=lon)
             st.success("Updated.")
-            st.experimental_rerun()
+            st.rerun()
 
 else:  # Delete
     target = st.sidebar.selectbox("Select camera", camera_ids)
     if st.sidebar.button("Delete camera", type="primary"):
         delete_camera(target)
         st.success(f"Camera '{target}' deleted.")
-        st.experimental_rerun()
+        st.rerun()
 
 # -----------------------------------------------------------------------------#
 # Map Rendering                                                                #
