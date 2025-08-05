@@ -152,7 +152,7 @@ deck = pdk.Deck(
     initial_view_state  = view_state,
     tooltip             = tooltip,
     map_provider        = "mapbox",
-    map_style           = "mapbox://styles/mapbox/outdoors-v12",
+    map_style           = "mapbox://styles/mapbox/outdoors-v11",
 )
 
 st.pydeck_chart(deck, use_container_width=True)
