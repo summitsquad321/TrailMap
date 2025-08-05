@@ -31,4 +31,4 @@ Interactive **Streamlit** dashboard + **FastAPI** ingest micro-service for visua
 │       └── 03_Maintenance.py
 └── .streamlit/
     ├── config.toml           # UI theme & server opts
-    └── secrets.toml.example  # 🔐 copy → secrets.toml
+ 
