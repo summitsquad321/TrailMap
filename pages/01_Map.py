@@ -11,6 +11,9 @@ import streamlit as st
 import pandas as pd
 import pydeck as pdk
 
+pdk.settings.mapbox_api_key = st.secrets["MAPBOX_TOKEN"]
+
+
 from trailmap.firestore_utils import (
     list_cameras,
     get_detections_df,
