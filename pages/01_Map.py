@@ -155,6 +155,17 @@ if full_df.empty:
     st.info("Add a camera with latitude & longitude to see it on the map.")
     st.stop()
 
+pin_layer = pdk.Layer(          #  <-- must come *before* deck = pdk.Deck
+    "IconLayer",
+    id="camera-pins",
+    data=full_df,
+    get_icon="icon_data",
+    get_position="[lon, lat]",
+    get_size=4,
+    size_scale=12,
+    pickable=True,
+)
+
 tooltip = {
     "html": (
         "<b>{nickname}</b><br/>Images: {total}<br/>"
