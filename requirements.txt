@@ -7,3 +7,4 @@ uvicorn[standard]>=0.30.0  # ASGI server
 python-dotenv>=1.0.1       # local env overrides
 pydantic>=2.7.1            # request validation
 Pillow
+requests
