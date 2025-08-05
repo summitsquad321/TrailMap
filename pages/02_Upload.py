@@ -26,7 +26,7 @@ uploaded = st.file_uploader("Select DeerLens-formatted CSV", type="csv")
 if uploaded:
     # Safe CSV load ───────────────────────────────────────────────────────────
     try:
-        df = pd.read_csv(uploaded)
+        df = pd.read_csv(uploaded, comment='m', skip_blank_lines=True)
     except Exception as e:                          # ParserError, UnicodeError …
         st.error(f"❌ Could not read CSV file:\n\n{e}")
         st.stop()
