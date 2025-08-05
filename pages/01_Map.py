@@ -141,20 +141,19 @@ full_df = (
     cam_df.merge(agg_df, on="camera_id", how="left")
     .fillna({"total": 0, "buck_pct": 0, "doe_pct": 0})
 )
+# ── Inject a base-64 pin icon ──────────────────────────────────
+PIN_URL, PIN_W, PIN_H = make_red_pin_data_url()
+PIN_ICON = {
+    "url": PIN_URL,
+    "width": PIN_W,
+    "height": PIN_H,
+    "anchorY": PIN_H,      # bottom-center anchoring
+}
+full_df["icon_data"] = [PIN_ICON] * len(full_df)
 
 if full_df.empty:
     st.info("Add a camera with latitude & longitude to see it on the map.")
     st.stop()
-
-# Pydeck layer
-layer = pdk.Layer(
-    "ScatterplotLayer",
-    data           = full_df,
-    get_position   = "[lon, lat]",
-    get_radius     = 50,
-    get_fill_color = [8, 160, 69, 160],   # green
-    pickable       = True,
-)
 
 tooltip = {
     "html": (
@@ -173,7 +172,7 @@ view_state = pdk.ViewState(
 
 # Default Mapbox Streets style (no map_style parameter)
 deck = pdk.Deck(
-    layers              = [layer],
+    layers              = [pin_layer],
     initial_view_state  = view_state,
     tooltip             = tooltip,
     map_provider        = "mapbox",
