@@ -11,6 +11,31 @@ import streamlit as st
 import pandas as pd
 import pydeck as pdk
 
+import io, base64
+from PIL import Image, ImageDraw
+
+def make_red_pin_data_url() -> tuple[str, int, int]:
+    """
+    Returns a ('data:image/png;base64,…', width, height) triple
+    for a red inverted-teardrop pin ~48 × 64 px.
+    Runs only once per session.
+    """
+    W, H = 48, 64
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # Round head
+    draw.ellipse([0, 0, W, W], fill=(220, 0, 0, 255))
+
+    # Pointed tail  ↓
+    draw.polygon([(W // 2, H), (0, W // 2), (W, W // 2)],
+                 fill=(220, 0, 0, 255))
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/png;base64,{b64}", W, H
+
 pdk.settings.mapbox_api_key = st.secrets["MAPBOX_TOKEN"]
 
 from trailmap.firestore_utils import (
