@@ -14,6 +14,29 @@ import pydeck as pdk
 import io, base64
 from PIL import Image, ImageDraw
 import numpy as np
+import requests
+
+# --- Wind helper: Open-Meteo free API (no key) -----------------------------
+@st.cache_data(ttl=43200)   # cache result 12 h
+def fetch_wind(lat: float, lon: float,
+               start: pd.Timestamp,
+               end: pd.Timestamp) -> pd.Series:
+    """
+    Return a pandas Series of hourly wind-direction degrees (10 m) for the
+    period [start, end]. Works for past or future dates.
+    """
+    hist = start < pd.Timestamp.utcnow().normalize()   # past → use archive API
+    base = ("https://archive-api.open-meteo.com/v1/archive"
+            if hist else
+            "https://api.open-meteo.com/v1/forecast")
+
+    url = (
+        f"{base}?latitude={lat}&longitude={lon}"
+        f"&hourly=wind_direction_10m&timezone=auto"
+        f"&start_date={start.date()}&end_date={end.date()}"
+    )
+    js = requests.get(url, timeout=15).json()
+    return pd.Series(js["hourly"]["wind_direction_10m"], dtype="float")
 
 # ── 8-point compass → degrees clockwise from North ─────────
 COMPASS_DEG = {
@@ -92,6 +115,28 @@ date_range = st.sidebar.date_input(
     "Date range", value=(min_date, max_date), min_value=min_date, max_value=max_date
 )
 hour_range = st.sidebar.slider("Hour of day", 0, 23, (0, 23), step=1)
+
+# --- Prevailing wind for the filtered window -------------------------------
+start_dt = pd.Timestamp(date_range[0]) + pd.Timedelta(hours=hour_range[0])
+end_dt   = pd.Timestamp(date_range[1]) + pd.Timedelta(hours=hour_range[1] + 1)
+
+# Cherry Grove centerpoint
+WIND_LAT, WIND_LON = 41.7048, -79.1453
+wind_deg_series = fetch_wind(WIND_LAT, WIND_LON, start_dt, end_dt)
+
+if wind_deg_series.empty or wind_deg_series.isna().all():
+    wind_compass = None
+else:
+    # MODE (most frequent) of directions, rounded to nearest 45°
+    heading = wind_deg_series.mode().iat[0]               # e.g., 223°
+    heading = round(heading / 45) * 45 % 360              # snap to 8-point
+    compass_lookup = {v: k for k, v in COMPASS_DEG.items()}
+    wind_compass = compass_lookup.get(heading, "?")
+
+if wind_compass:
+    st.sidebar.info(f"💨 Prevailing wind: **{wind_compass}**")
+else:
+    st.sidebar.warning("No wind data for this period.")
 
 camera_list = list_cameras()
 camera_ids = [c["camera_id"] for c in camera_list]
