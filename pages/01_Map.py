@@ -43,6 +43,20 @@ def make_red_pin_data_url() -> tuple[str, int, int]:
     b64 = base64.b64encode(buf.getvalue()).decode()
     return f"data:image/png;base64,{b64}", W, H
 
+def make_arrow_data_url() -> tuple[str, int, int]:
+    """Returns ('data:image/png;base64,…', W, H) for a white up-arrow."""
+    W = H = 64
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    # shaft
+    draw.rectangle([(W//2 - 5, H//4), (W//2 + 5, H*3//4)], fill=(255,255,255,255))
+    # head
+    draw.polygon([(W//2, 0), (W//2 - 15, H//4), (W//2 + 15, H//4)],
+                 fill=(255,255,255,255))
+    buf = io.BytesIO(); img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/png;base64,{b64}", W, H
+
 pdk.settings.mapbox_api_key = st.secrets["MAPBOX_TOKEN"]
 
 from trailmap.firestore_utils import (
@@ -201,20 +215,6 @@ pin_layer = pdk.Layer(          #  <-- must come *before* deck = pdk.Deck
     size_scale=12,
     pickable=True,
 )
-
-def make_arrow_data_url() -> tuple[str, int, int]:
-    """Returns ('data:image/png;base64,…', W, H) for a white up-arrow."""
-    W = H = 64
-    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    # shaft
-    draw.rectangle([(W//2 - 5, H//4), (W//2 + 5, H*3//4)], fill=(255,255,255,255))
-    # head
-    draw.polygon([(W//2, 0), (W//2 - 15, H//4), (W//2 + 15, H//4)],
-                 fill=(255,255,255,255))
-    buf = io.BytesIO(); img.save(buf, format="PNG")
-    b64 = base64.b64encode(buf.getvalue()).decode()
-    return f"data:image/png;base64,{b64}", W, H
 
 arrow_layer = pdk.Layer(
     "IconLayer",
