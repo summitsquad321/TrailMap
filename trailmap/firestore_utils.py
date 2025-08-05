@@ -148,32 +148,46 @@ def ingest_detections(rows: List[Dict]) -> None:
     """
     Batch-write incoming detection rows.
 
-    Each row MUST contain:
-        file_name, date_time, buck_count, deer_count, doe_count, camera_id
+    • Unique doc-ID scheme:  <cameraId>_<YYYYMMDDThhmmss>_<fileName>
+      → prevents silent overwrites when cameras recycle file names year-to-year.
+    • Validates camera_id and date_time.
+    • Raises ValueError on any bad row (batch aborted).
     """
-    batch = client().batch()
-    detect_ref = client().collection(DETECT_COL)
+    db = client()
+    detect_col = db.collection(DETECT_COL)
     camera_cache = {c["camera_id"] for c in list_cameras()}
 
-    for row in rows:
-        cam_id = row["camera_id"]
+    batch = db.batch()
+
+    for r in rows:
+        cam_id = r["camera_id"]
         if cam_id not in camera_cache:
             raise ValueError(f"Unknown camera_id '{cam_id}' – create camera first.")
 
-        doc_ref = detect_ref.document()
-        batch.set(
-            doc_ref,
-            {
-                **row,
-                "date_time": firestore.SERVER_TIMESTAMP
-                if row["date_time"] == "NOW"
-                else row["date_time"],
-                "ingested_at": datetime.utcnow(),
-            },
-        )
+        # ── Parse / normalise the timestamp ────────────────────────────────
+        try:
+            dt = (
+                datetime.utcnow()                      # special literal
+                if r["date_time"] == "NOW" else
+                pd.to_datetime(r["date_time"]).to_pydatetime()
+            )
+        except Exception as exc:
+            raise ValueError(f"Bad date_time '{r['date_time']}'") from exc
+
+        # ── Build collision-proof document ID ─────────────────────────────
+        ts_str = dt.strftime("%Y%m%dT%H%M%S")          # 20250805T131045
+        doc_id = f"{cam_id}_{ts_str}_{r['file_name']}"
+
+        # ── Assemble Firestore payload ───────────────────────────────────
+        payload = {
+            **r,
+            "date_time": dt,
+            "ingested_at": datetime.utcnow(),
+        }
+
+        batch.set(detect_col.document(doc_id), payload, merge=False)
 
     batch.commit()
-
 
 def get_detections_df() -> pd.DataFrame:
     """
