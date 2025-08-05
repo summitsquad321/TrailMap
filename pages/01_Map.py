@@ -140,9 +140,10 @@ tooltip = {
 }
 
 view_state = pdk.ViewState(
-    latitude  = float(full_df["lat"].mean()),
-    longitude = float(full_df["lon"].mean()),
-    zoom      = 5,
+    latitude=41.203323,      # PA centroid
+    longitude=-77.194525,
+    zoom=6,                  # fills the state; try 5–7 to taste
+    pitch=0,
 )
 
 # Default Mapbox Streets style (no map_style parameter)
