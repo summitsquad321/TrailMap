@@ -14,6 +14,12 @@ import pydeck as pdk
 import io, base64
 from PIL import Image, ImageDraw
 
+# ── 8-point compass → degrees clockwise from North ─────────
+COMPASS_DEG = {
+    "N": 0,  "NE": 45,  "E": 90,  "SE": 135,
+    "S": 180,"SW": 225, "W": 270, "NW": 315,
+}
+
 def make_red_pin_data_url() -> tuple[str, int, int]:
     """
     Returns a ('data:image/png;base64,…', width, height) triple
@@ -52,6 +58,15 @@ st.set_page_config(page_title="TrailMap – Cameras", layout="wide")
 st.sidebar.title("Filters")
 
 det_df = get_detections_df()           # cached by Streamlit
+
+# ── Map "direction" strings to degrees ─────────────────────
+if "direction" in det_df.columns:
+    det_df["direction_deg"] = (
+        det_df["direction"].str.upper()           # e.g. "sw" → "SW"
+              .map(COMPASS_DEG)                   # unknown / blank → NaN
+    )
+else:
+    det_df["direction_deg"] = np.nan
 
 if det_df.empty:
     min_date = max_date = pd.Timestamp.today().normalize()
@@ -135,12 +150,32 @@ else:
     agg_df["buck_pct"] = (agg_df["buck_cnt"] / agg_df["total"]).round(2)
     agg_df["doe_pct"]  = (agg_df["doe_cnt"]  / agg_df["total"]).round(2)
 
+# ── Predominant travel direction per camera in current slice ─
+if det_df.empty:
+    heading_df = pd.DataFrame(columns=["camera_id", "heading"])
+else:
+    # For each camera, take the MODE of direction_deg
+    heading_df = (
+        det_df[mask & det_df["direction_deg"].notna()]
+          .groupby("camera_id")["direction_deg"]
+          .agg(lambda s: s.mode().iat[0])   # first value if tie
+          .reset_index(name="heading")
+    )
+
 # Combine with camera coords
 cam_df  = pd.DataFrame(camera_list).dropna(subset=["lat", "lon"])
 full_df = (
     cam_df.merge(agg_df, on="camera_id", how="left")
     .fillna({"total": 0, "buck_pct": 0, "doe_pct": 0})
 )
+
+arrow_df = cam_df.merge(heading_df, on="camera_id", how="inner")
+ARROW_URL, ARROW_W, ARROW_H = make_arrow_data_url()
+ARROW_ICON = {"url": ARROW_URL, "width": ARROW_W, "height": ARROW_H,
+              "anchorY": ARROW_H//2}
+arrow_df["icon_data"] = [ARROW_ICON] * len(arrow_df)
+
+
 # ── Inject a base-64 pin icon ──────────────────────────────────
 PIN_URL, PIN_W, PIN_H = make_red_pin_data_url()
 PIN_ICON = {
@@ -166,6 +201,32 @@ pin_layer = pdk.Layer(          #  <-- must come *before* deck = pdk.Deck
     pickable=True,
 )
 
+def make_arrow_data_url() -> tuple[str, int, int]:
+    """Returns ('data:image/png;base64,…', W, H) for a white up-arrow."""
+    W = H = 64
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    # shaft
+    draw.rectangle([(W//2 - 5, H//4), (W//2 + 5, H*3//4)], fill=(255,255,255,255))
+    # head
+    draw.polygon([(W//2, 0), (W//2 - 15, H//4), (W//2 + 15, H//4)],
+                 fill=(255,255,255,255))
+    buf = io.BytesIO(); img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/png;base64,{b64}", W, H
+
+arrow_layer = pdk.Layer(
+    "IconLayer",
+    id="travel-arrows",
+    data=arrow_df,
+    get_icon="icon_data",
+    get_position="[lon, lat]",
+    get_angle="heading",        # rotate arrow client-side
+    get_size=3,                 # a bit smaller than pins
+    size_scale=8,
+    pickable=False,
+)
+
 tooltip = {
     "html": (
         "<b>{nickname}</b><br/>Images: {total}<br/>"
@@ -183,7 +244,7 @@ view_state = pdk.ViewState(
 
 # Default Mapbox Streets style (no map_style parameter)
 deck = pdk.Deck(
-    layers              = [pin_layer],
+    layers              = [pin_layer, arrow_layer],
     initial_view_state  = view_state,
     tooltip             = tooltip,
     map_provider        = "mapbox",
