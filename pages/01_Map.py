@@ -140,9 +140,9 @@ tooltip = {
 }
 
 view_state = pdk.ViewState(
-    latitude=41.203323,      # PA centroid
-    longitude=-77.194525,
-    zoom=6,                  # fills the state; try 5–7 to taste
+    latitude=41.7048,      # Cherry Grove, PA
+    longitude=-79.1453,
+    zoom=11,               # township-scale; tweak 10-12 to taste
     pitch=0,
 )
 
