@@ -13,6 +13,7 @@ import pydeck as pdk
 
 import io, base64
 from PIL import Image, ImageDraw
+import numpy as np
 
 # ── 8-point compass → degrees clockwise from North ─────────
 COMPASS_DEG = {
