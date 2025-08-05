@@ -146,7 +146,70 @@ view_state = pdk.ViewState(
     pitch=0,
 )
 
-st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip=tooltip), use_container_width=True)
+# -----------------------------------------------------------------------------#
+# Map Rendering                                                                #
+# -----------------------------------------------------------------------------#
+# Aggregate detection metrics fast -------------------------------------------#
+if det_df.empty:
+    agg_df = pd.DataFrame(
+        columns=["camera_id", "total", "buck_pct", "doe_pct", "last_seen"]
+    )
+else:
+    masked = det_df[
+        (det_df["camera_id"].isin(selected_cameras))
+        & (det_df["date_time"].dt.date.between(*date_range))
+        & (det_df["date_time"].dt.hour.between(*hour_range))
+    ]
+    agg_df = (
+        masked.groupby("camera_id")
+        .agg(
+            total=("file_name", "count"),
+            buck_cnt=("buck_count", "sum"),
+            doe_cnt=("doe_count", "sum"),
+            last_seen=("date_time", "max"),
+        )
+        .reset_index()
+    )
+    agg_df["buck_pct"] = (agg_df["buck_cnt"] / agg_df["total"]).round(2)
+    agg_df["doe_pct"] = (agg_df["doe_cnt"] / agg_df["total"]).round(2)
 
-# NOTE: Clicking a point to load gallery/charts would be implemented by listening
-#       to deckgl events via st.pydeck_chart's returned JSON – omitted for brevity.
+# Combine with camera coords --------------------------------------------------#
+cam_df = pd.DataFrame(camera_list)
+full_df = cam_df.merge(agg_df, on="camera_id", how="left").fillna(
+    {"total": 0, "buck_pct": 0, "doe_pct": 0}
+)
+
+# Pydeck layer ----------------------------------------------------------------#
+tooltip = {
+    "html": (
+        "<b>{nickname}</b><br/>Images: {total}<br/>"
+        "Buck %: {buck_pct}<br/>Doe %: {doe_pct}<br/>Last-seen: {last_seen}"
+    ),
+    "style": {"color": "white"},
+}
+
+layer = pdk.Layer(
+    "ScatterplotLayer",
+    data=full_df,
+    get_position="[lon, lat]",
+    get_radius=50,
+    get_fill_color=[8, 160, 69, 160],  # RGBA
+    pickable=True,
+)
+
+view_state = pdk.ViewState(
+    latitude=float(full_df["lat"].mean()) if not full_df.empty else 40,
+    longitude=float(full_df["lon"].mean()) if not full_df.empty else -80,
+    zoom=5,
+    pitch=0,
+)
+
+# ⛰️  Mapbox Outdoors v12 style
+deck = pdk.Deck(
+    layers=[layer],
+    initial_view_state=view_state,
+    map_style="mapbox://styles/mapbox/outdoors-v12",
+    tooltip=tooltip,
+)
+
+st.pydeck_chart(deck, use_container_width=True)
