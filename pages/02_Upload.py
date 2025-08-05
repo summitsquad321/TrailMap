@@ -28,9 +28,26 @@ uploaded = st.file_uploader("Select DeerLens-formatted CSV", type="csv")
 
 if uploaded:
     df = pd.read_csv(uploaded)
+
+    # ─── NEW BLOCK: add camera picker if column missing ──────────────────────
+    if "camera_id" not in df.columns:
+        st.warning(
+            "CSV has no **camera_id** column. "
+            "Choose which camera these rows belong to:"
+        )
+        existing_ids = [c["camera_id"] for c in list_cameras()]
+        selected_cam = st.selectbox("Camera", existing_ids)
+
+        if st.checkbox("Preview rows with selected camera_id"):
+            preview_df = df.copy()
+            preview_df["camera_id"] = selected_cam
+            st.dataframe(preview_df.head())
+
+        # overwrite in memory so rest of the logic works
+        df["camera_id"] = selected_cam
+    # ─── END NEW BLOCK ───────────────────────────────────────────────────────
+
     st.write("Preview:", df.head())
-    camera_set = {c["camera_id"] for c in list_cameras()}
-    unknown_cams = sorted(set(df["camera_id"]) - camera_set)
 
     # Handle unknown cameras inline ------------------------------------------#
     if unknown_cams:
