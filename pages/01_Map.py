@@ -208,7 +208,7 @@ view_state = pdk.ViewState(
 deck = pdk.Deck(
     layers=[layer],
     initial_view_state=view_state,
-    map_style="mapbox://styles/mapbox/outdoors-v12",
+    map_style="mapbox://styles/mapbox/light-v11",
     tooltip=tooltip,
 )
 
