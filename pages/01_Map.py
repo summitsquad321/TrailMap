@@ -18,23 +18,32 @@ import requests
 
 # --- Wind helper: Open-Meteo free API (no key) -----------------------------
 @st.cache_data(ttl=43200)   # cache result 12 h
-def fetch_wind(lat: float, lon: float,
-               start: pd.Timestamp,
-               end: pd.Timestamp) -> pd.Series:
+def fetch_wind(
+    lat: float,
+    lon: float,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+) -> pd.Series:
     """
-    Return a pandas Series of hourly wind-direction degrees (10 m) for the
-    period [start, end]. Works for past or future dates.
+    Return a Series of hourly wind-direction degrees (10 m) for the period
+    [start, end]. Works for past or future dates and is cached 12 h.
     """
-    hist = start < pd.Timestamp.utcnow().normalize()   # past → use archive API
-    base = ("https://archive-api.open-meteo.com/v1/archive"
-            if hist else
-            "https://api.open-meteo.com/v1/forecast")
+    today = pd.Timestamp.utcnow().date()        # plain (tz-naïve) date
+    hist  = end.date() < today                  # entire window in the past?
+
+    base = (
+        "https://archive-api.open-meteo.com/v1/archive"
+        if hist
+        else
+        "https://api.open-meteo.com/v1/forecast"
+    )
 
     url = (
         f"{base}?latitude={lat}&longitude={lon}"
         f"&hourly=wind_direction_10m&timezone=auto"
         f"&start_date={start.date()}&end_date={end.date()}"
     )
+
     js = requests.get(url, timeout=15).json()
     return pd.Series(js["hourly"]["wind_direction_10m"], dtype="float")
 
