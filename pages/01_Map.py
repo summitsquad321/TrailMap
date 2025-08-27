@@ -2,7 +2,7 @@
 Streamlit Page ▸ Map  🗺️
 
 • Interactive Pydeck map with one point per camera.
-• Hover tooltip: nickname, total images, buck %, doe %, last-seen.
+• Hover tooltip: nickname, total images, buck %, doe %, last-seen..
 • Sidebar filters and camera CRUD.
 """
 from __future__ import annotations
